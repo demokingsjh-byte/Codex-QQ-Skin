@@ -482,15 +482,16 @@ async function loadStaticPayloadAssets() {
       fs.readFile(path.join(root, "assets", "codex-pet.png")),
       fs.readFile(path.join(root, "assets", "retro-window-frame.png")),
       fs.readFile(path.join(root, "assets", "qq-avatar.png")),
+      fs.readFile(path.join(root, "assets", "qq-show.png")),
       fs.readFile(path.join(root, "assets", "audio", "qq-system-cough.mp3")),
     ]).catch((error) => {
       staticPayloadAssets = null;
       throw error;
     });
   }
-  const [css, customCss, template, qqArt, qqThemeJson, pet, retroFrame, qqAvatar, coughAudio] = await staticPayloadAssets;
+  const [css, customCss, template, qqArt, qqThemeJson, pet, retroFrame, qqAvatar, qqShow, coughAudio] = await staticPayloadAssets;
   const qqTheme = JSON.parse(qqThemeJson);
-  return { css, customCss, template, qqArt, qqTheme, pet, retroFrame, qqAvatar, coughAudio, cacheHit };
+  return { css, customCss, template, qqArt, qqTheme, pet, retroFrame, qqAvatar, qqShow, coughAudio, cacheHit };
 }
 
 function invalidateStaticPayloadAssets() {
@@ -503,7 +504,7 @@ async function loadPayload(themeDir) {
     loadStaticPayloadAssets(),
     loadTheme(themeDir),
   ]);
-  const { css, customCss, template, qqArt, qqTheme, pet, retroFrame, qqAvatar, coughAudio } = staticAssets;
+  const { css, customCss, template, qqArt, qqTheme, pet, retroFrame, qqAvatar, qqShow, coughAudio } = staticAssets;
   const { art, extension, theme } = loaded;
   const styleRevision = createHash("sha256").update(css).update(customCss).digest("hex").slice(0, 20);
   const artMetadata = readImageMetadata(art, extension);
@@ -520,6 +521,7 @@ async function loadPayload(themeDir) {
   const petDataUrl = `data:image/png;base64,${pet.toString("base64")}`;
   const retroFrameDataUrl = `data:image/png;base64,${retroFrame.toString("base64")}`;
   const qqAvatarDataUrl = `data:image/png;base64,${qqAvatar.toString("base64")}`;
+  const qqShowDataUrl = `data:image/png;base64,${qqShow.toString("base64")}`;
   const coughAudioDataUrl = `data:audio/mpeg;base64,${coughAudio.toString("base64")}`;
   const payload = template
     .replace("__QQ_SKIN_CSS_JSON__", JSON.stringify(css))
@@ -529,6 +531,7 @@ async function loadPayload(themeDir) {
     .replace("__QQ_SKIN_PET_JSON__", JSON.stringify(petDataUrl))
     .replace("__QQ_SKIN_RETRO_FRAME_JSON__", JSON.stringify(retroFrameDataUrl))
     .replace("__QQ_SKIN_QQ_AVATAR_JSON__", JSON.stringify(qqAvatarDataUrl))
+    .replace("__QQ_SKIN_QQ_SHOW_JSON__", JSON.stringify(qqShowDataUrl))
     .replace("__QQ_SKIN_COUGH_AUDIO_JSON__", JSON.stringify(coughAudioDataUrl))
     .replace("__QQ_SKIN_THEME_JSON__", JSON.stringify(theme))
     .replace("__QQ_STABLE_THEME_JSON__", JSON.stringify(qqTheme))
@@ -544,6 +547,7 @@ async function loadPayload(themeDir) {
     .update(pet)
     .update(retroFrame)
     .update(qqAvatar)
+    .update(qqShow)
     .update(coughAudio)
     .update(JSON.stringify(theme))
     .digest("hex")
@@ -553,6 +557,7 @@ async function loadPayload(themeDir) {
     petBytes: pet.length,
     frameBytes: retroFrame.length,
     qqAvatarBytes: qqAvatar.length,
+    qqShowBytes: qqShow.length,
     coughAudioBytes: coughAudio.length,
     payload,
     revision,
@@ -645,6 +650,9 @@ async function verifySession(session) {
     const composer = box(document.querySelector('.composer-surface-chrome'));
     const sidebar = box(document.querySelector('aside.app-shell-left-panel'));
     const chrome = document.getElementById('codex-qq-skin-chrome');
+    const qqShowPanel = document.getElementById('codex-qq-skin-companion');
+    const qqShowImage = qqShowPanel?.querySelector('.qq-skin-show-image') ?? null;
+    const qqShowToggle = qqShowPanel?.querySelector('[data-companion-action="collapse"]') ?? null;
     const result = {
       installed: document.documentElement.classList.contains('codex-qq-skin') ||
         document.documentElement.classList.contains('codex-dream-skin'),
@@ -662,6 +670,13 @@ async function verifySession(session) {
       shell,
       composer,
       sidebar,
+      qqShow: {
+        expected: document.documentElement.getAttribute('data-qq-show') === 'true',
+        collapsed: Boolean(qqShowPanel?.classList.contains('is-collapsed')),
+        panel: box(qqShowPanel),
+        image: box(qqShowImage),
+        toggle: box(qqShowToggle),
+      },
       viewport: { width: innerWidth, height: innerHeight },
       documentOverflow: {
         x: document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -669,8 +684,12 @@ async function verifySession(session) {
       },
     };
     const chromePass = result.skinMode === 'custom' || (result.chromePresent && result.chromePointerEvents === 'none');
+    const qqShowPass = !result.qqShow.expected || (
+      result.qqShow.panel?.visible && result.qqShow.toggle?.visible &&
+      (result.qqShow.collapsed || result.qqShow.image?.visible)
+    );
     const basePass = result.installed && result.version === ${JSON.stringify(SKIN_VERSION)} &&
-      result.stylePresent && chromePass &&
+      result.stylePresent && chromePass && qqShowPass &&
       Boolean(result.shell?.visible) && Boolean(result.sidebar?.visible) && !result.documentOverflow.x;
     // Project selector markup varies across Codex builds — soft requirement.
     const homePass = !result.homeRoute || (
@@ -816,7 +835,7 @@ function watchPayloadSources(themeDir, onDirty) {
           (!name || name === "qq-skin.css" || name === "custom-skin.css" || name === "renderer-inject.js" ||
             name === "portal-hero.png" || name === "theme.json" ||
             name === "codex-pet.png" || name === "retro-window-frame.png" ||
-            name === "qq-avatar.png" || name === "audio");
+            name === "qq-avatar.png" || name === "qq-show.png" || name === "audio");
         if (kind === "static" && !staticChanged) return;
         onDirty({ staticChanged });
       });
@@ -995,6 +1014,7 @@ if (path.resolve(process.argv[1] || "") === path.resolve(scriptPath)) {
         petBytes: loaded.petBytes,
         frameBytes: loaded.frameBytes,
         qqAvatarBytes: loaded.qqAvatarBytes,
+        qqShowBytes: loaded.qqShowBytes,
         payloadBytes: Buffer.byteLength(loaded.payload),
         artMetadata: loaded.theme.artMetadata ?? null,
         timings: loaded.timings,

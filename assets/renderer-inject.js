@@ -1,4 +1,4 @@
-((cssText, customCssText, artDataUrl, qqArtDataUrl, petDataUrl, retroFrameDataUrl, qqAvatarDataUrl, coughAudioDataUrl, themeConfig, qqThemeConfig) => {
+((cssText, customCssText, artDataUrl, qqArtDataUrl, petDataUrl, retroFrameDataUrl, qqAvatarDataUrl, qqShowDataUrl, coughAudioDataUrl, themeConfig, qqThemeConfig) => {
   const STATE_KEY = "__CODEX_QQ_SKIN_STATE__";
   const DISABLED_KEY = "__CODEX_QQ_SKIN_DISABLED__";
   const STYLE_ID = "codex-qq-skin-style";
@@ -11,11 +11,13 @@
   const TOGGLE_ID = "codex-qq-skin-toggle";
   const ENABLED_STORAGE_KEY = "codex-qq-skin-enabled";
   const MODE_STORAGE_KEY = "codex-qq-skin-mode";
+  const QQ_SHOW_COLLAPSED_KEY = "codex-qq-show-collapsed";
   const SHELL_ATTR = "data-dream-shell";
   const ART_ATTRS = [
     "data-dream-art-wide", "data-dream-art-safe", "data-dream-task-mode",
     "data-dream-art-safe-area", "data-dream-art-task-mode", "data-dream-art-aspect",
     "data-dream-art-ready", "data-dream-art-fit", "data-dream-three-pane", "data-dream-summary-state", "data-dream-left-sidebar",
+    "data-qq-show",
   ];
   const VERSION = __QQ_SKIN_VERSION_JSON__;
   const STYLE_REVISION = __QQ_SKIN_STYLE_REVISION_JSON__;
@@ -52,6 +54,7 @@
   ];
   const installToken = {};
   const autoOpenedSummaryToggles = new WeakSet();
+  const autoClosedSummaryToggles = new WeakSet();
   const autoOpenedSidebarToggles = new WeakSet();
   const existingAnalysisCache = window[ANALYSIS_CACHE_KEY];
   const analysisCache = existingAnalysisCache && typeof existingAnalysisCache.get === "function" &&
@@ -95,6 +98,7 @@
   const petUrl = dataUrlToObjectUrl(petDataUrl, "image/png");
   const retroFrameUrl = dataUrlToObjectUrl(retroFrameDataUrl, "image/png");
   const qqAvatarUrl = dataUrlToObjectUrl(qqAvatarDataUrl, "image/png");
+  const qqShowUrl = dataUrlToObjectUrl(qqShowDataUrl, "image/png");
   const coughAudioUrl = dataUrlToObjectUrl(coughAudioDataUrl, "audio/mpeg");
 
   if (previous?.observer) previous.observer.disconnect();
@@ -1091,37 +1095,78 @@
     setTextContent(companionParts.statusText, statusLabels[status] || statusLabels.idle);
   };
 
+  const readQQShowCollapsed = () => {
+    try { return window.localStorage?.getItem(QQ_SHOW_COLLAPSED_KEY) === "true"; }
+    catch { return false; }
+  };
+
+  const syncQQShowCollapsed = (companion, collapsed, persist = false) => {
+    if (!companion) return;
+    companion.classList.toggle("is-collapsed", collapsed);
+    const title = companion.querySelector(".qq-skin-companion-title > span:first-child");
+    setTextContent(title, collapsed ? "QQ秀" : "我的 QQ 秀");
+    const button = companion.querySelector('[data-companion-action="collapse"]');
+    if (button) {
+      button.setAttribute?.("aria-expanded", collapsed ? "false" : "true");
+      button.setAttribute?.("aria-label", collapsed ? "展开 QQ 秀" : "收纳 QQ 秀");
+      button.setAttribute?.("title", collapsed ? "展开 QQ 秀" : "收纳 QQ 秀");
+      setTextContent(button, collapsed ? "‹" : "›");
+    }
+    if (persist) {
+      try { window.localStorage?.setItem(QQ_SHOW_COLLAPSED_KEY, collapsed ? "true" : "false"); } catch {}
+    }
+  };
+
+  const findQQShowHost = () => {
+    const main = document.querySelector("main.main-surface") || document.querySelector("main");
+    const sidebar = document.querySelector("aside.app-shell-left-panel");
+    const host = main?.parentElement;
+    return host && (!sidebar || sidebar.parentElement === host) ? host : document.body;
+  };
+
   const ensureCompanion = () => {
+    const host = findQQShowHost();
+    if (host !== document.body) host.classList.add("qq-skin-show-layout-host");
     let companion = document.getElementById(COMPANION_ID);
-    if (!companion || companion.parentElement !== document.body) {
+    if (!companion || companion.parentElement !== host ||
+      !companion.querySelector?.('[data-companion-action="collapse"]')) {
       companion?.remove();
       companion = document.createElement("section");
       companion.id = COMPANION_ID;
-      companion.setAttribute("aria-label", "Codex 伙伴");
+      companion.setAttribute("aria-label", "我的 QQ 秀");
       companion.innerHTML = `
         <div class="qq-skin-companion-title">
-          <span>Codex 伙伴</span><i></i>
+          <span>我的 QQ 秀</span>
+          <span class="qq-skin-companion-tools"><i></i><button type="button" data-companion-action="collapse" aria-expanded="true" title="收纳 QQ 秀">›</button></span>
         </div>
-        <div class="qq-skin-companion-stage">
-          <img class="qq-skin-pet-image" alt="" draggable="false">
-          <div class="qq-skin-pet-glow"></div>
-        </div>
+        <section class="qq-skin-show-card qq-skin-show-peer" aria-label="对方形象">
+          <div class="qq-skin-show-card-title"><span>对方形象</span><i></i></div>
+          <div class="qq-skin-show-portrait"><img class="qq-skin-show-image qq-skin-show-peer-image" alt="对方 QQ 秀形象" draggable="false"><b>在线</b></div>
+          <div class="qq-skin-show-mini-tools" aria-hidden="true"><span>♥</span><span>☀</span><span>★</span><span>♬</span></div>
+        </section>
+        <section class="qq-skin-show-card qq-skin-show-self" aria-label="我的形象">
+          <div class="qq-skin-show-card-title"><span>我的形象</span><i></i></div>
+          <div class="qq-skin-show-portrait"><img class="qq-skin-show-image qq-skin-show-self-image" alt="我的 QQ 秀形象" draggable="false"><b>在线</b></div>
+          <div class="qq-skin-show-mini-tools" aria-hidden="true"><span>✿</span><span>♡</span><span>◇</span><span>☻</span></div>
+        </section>
         <div class="qq-skin-companion-actions">
-          <button type="button" data-companion-action="pet">🐾 打开宠物</button>
-          <button type="button" data-companion-action="terminal">⌨ 终端</button>
+          <button type="button" data-companion-action="pet">👕 换装</button>
+          <button type="button" data-companion-action="terminal">⌨ 工具</button>
           <button type="button" data-companion-action="sound"></button>
         </div>
         <div class="qq-skin-pet-status"><i></i><span>在线 · 随时待命</span><b class="qq-skin-weekly-usage">本周剩余 --</b></div>`;
-      document.body.appendChild(companion);
+      host.appendChild(companion);
       companionParts = null;
     }
     if (!companionParts || companionParts.companion !== companion) {
       companionParts = {
         companion,
-        image: companion.querySelector(".qq-skin-pet-image"),
+        peerImage: companion.querySelector(".qq-skin-show-peer-image"),
+        selfImage: companion.querySelector(".qq-skin-show-self-image"),
         petButton: companion.querySelector('[data-companion-action="pet"]'),
         terminalButton: companion.querySelector('[data-companion-action="terminal"]'),
         soundButton: companion.querySelector('[data-companion-action="sound"]'),
+        collapseButton: companion.querySelector('[data-companion-action="collapse"]'),
         statusText: companion.querySelector(".qq-skin-pet-status span"),
         weeklyUsage: companion.querySelector(".qq-skin-weekly-usage"),
       };
@@ -1137,8 +1182,13 @@
       };
       bindAction(companionParts.petButton, openAvatarOverlay, "打开 Codex 宠物");
       bindAction(companionParts.terminalButton, toggleNativeTerminal, "显示或隐藏终端");
+      bindAction(companionParts.collapseButton, () => {
+        syncQQShowCollapsed(companion, !companion.classList.contains("is-collapsed"), true);
+      }, "收纳或展开 QQ 秀");
     }
-    if (companionParts.image && companionParts.image.src !== petUrl) companionParts.image.src = petUrl;
+    if (companionParts.peerImage && companionParts.peerImage.src !== qqShowUrl) companionParts.peerImage.src = qqShowUrl;
+    if (companionParts.selfImage && companionParts.selfImage.src !== qqShowUrl) companionParts.selfImage.src = qqShowUrl;
+    syncQQShowCollapsed(companion, readQQShowCollapsed());
     soundMonitor.bindButton(companionParts.soundButton);
     soundMonitor.bindStatus(syncCompanionStatus);
     syncCompanionStatus(soundMonitor.status);
@@ -1460,6 +1510,7 @@
     document.getElementById(RETRO_PROFILE_ID)?.remove();
     document.querySelectorAll(".qq-skin-section-bar").forEach((node) => node.classList.remove("qq-skin-section-bar"));
     document.querySelectorAll(".dream-retro-profile-host").forEach((node) => node.classList.remove("dream-retro-profile-host"));
+    document.querySelectorAll(".qq-skin-show-layout-host").forEach((node) => node.classList.remove("qq-skin-show-layout-host"));
     document.querySelectorAll(".dream-retro-window-control").forEach((button) => button.classList.remove(
       "dream-retro-window-control", "dream-retro-control-summary",
       "dream-retro-control-bottom", "dream-retro-control-sidebar",
@@ -1539,7 +1590,7 @@
       ? clamp(Math.round(LAYOUT.minWidth), 1080, 2400) : 1180;
     const layoutRightWidth = typeof LAYOUT.rightWidth === "number"
       ? clamp(Math.round(LAYOUT.rightWidth), 272, 360) : 300;
-    const shouldAutoOpenSummary = LAYOUT.rightPanel !== "remember";
+    const shouldAutoOpenSummary = false;
     const wideEnough = window.innerWidth >= layoutMinWidth;
     const settingsRoute = [...document.querySelectorAll('input[placeholder]')].some((input) => {
       let placeholder = input.getAttribute("placeholder") || "";
@@ -1563,6 +1614,15 @@
     }
     const layoutEligible = layoutBaseEligible && leftSidebarOpen && Boolean(summaryToggle);
     let autoOpening = false;
+    let autoClosing = false;
+    if (
+      layoutEligible && summaryToggle.getAttribute("aria-pressed") === "true" &&
+      !autoClosedSummaryToggles.has(summaryToggle) && typeof summaryToggle.click === "function"
+    ) {
+      autoClosedSummaryToggles.add(summaryToggle);
+      autoClosing = true;
+      summaryToggle.click();
+    }
     if (
       layoutEligible && shouldAutoOpenSummary && summaryToggle.getAttribute("aria-pressed") !== "true" &&
       !autoOpenedSummaryToggles.has(summaryToggle) && typeof summaryToggle.click === "function"
@@ -1571,7 +1631,7 @@
       autoOpening = true;
       summaryToggle.click();
     }
-    const summaryOpen = layoutEligible &&
+    const summaryOpen = layoutEligible && !autoClosing &&
       (autoOpening || summaryToggle?.getAttribute("aria-pressed") === "true");
     setAttribute(root, "data-dream-three-pane", summaryOpen ? "true" : "false");
     setAttribute(root, "data-dream-left-sidebar", leftSidebarOpen ? "open" : "closed");
@@ -1607,9 +1667,11 @@
       rightTray.classList.remove("is-visible");
       root.style.removeProperty("--dream-right-panel-right");
     }
-    // The summary and generic sidebar controls can briefly report the same
-    // pressed state. Show the companion only while the summary is visible.
-    companion.classList.toggle("is-visible", Boolean(summaryPanel));
+    // QQ Show is an independent collapsible rail. It remains available even
+    // when Codex swaps Output/Source for another native right-side tool.
+    const showQQShow = !settingsRoute && Boolean(shellMain);
+    setAttribute(root, "data-qq-show", showQQShow ? "true" : "false");
+    companion.classList.toggle("is-visible", showQQShow);
     let chrome = document.getElementById(CHROME_ID);
     let created = false;
     if (!chrome || chrome.parentElement !== document.body) {
@@ -1692,6 +1754,8 @@
     document.getElementById(RETRO_PROFILE_ID)?.remove();
     document.querySelectorAll(".dream-retro-profile-host").forEach((node) =>
       node.classList.remove("dream-retro-profile-host"));
+    document.querySelectorAll(".qq-skin-show-layout-host").forEach((node) =>
+      node.classList.remove("qq-skin-show-layout-host"));
     document.querySelectorAll(".dream-retro-window-control").forEach((button) =>
       button.classList.remove(
         "dream-retro-window-control", "dream-retro-control-summary",
@@ -1812,6 +1876,7 @@
     if (state?.petUrl) URL.revokeObjectURL(state.petUrl);
     if (state?.retroFrameUrl) URL.revokeObjectURL(state.retroFrameUrl);
     if (state?.qqAvatarUrl) URL.revokeObjectURL(state.qqAvatarUrl);
+    if (state?.qqShowUrl) URL.revokeObjectURL(state.qqShowUrl);
     if (state?.coughAudioUrl) URL.revokeObjectURL(state.coughAudioUrl);
     delete window[STATE_KEY];
     return true;
@@ -1887,6 +1952,7 @@
     petUrl,
     retroFrameUrl,
     qqAvatarUrl,
+    qqShowUrl,
     coughAudioUrl,
     installToken,
     analysis: artAnalysis,
@@ -1912,6 +1978,9 @@
   }
   if (previous?.qqAvatarUrl && previous.qqAvatarUrl !== qqAvatarUrl) {
     URL.revokeObjectURL(previous.qqAvatarUrl);
+  }
+  if (previous?.qqShowUrl && previous.qqShowUrl !== qqShowUrl) {
+    URL.revokeObjectURL(previous.qqShowUrl);
   }
   if (previous?.coughAudioUrl && previous.coughAudioUrl !== coughAudioUrl) {
     URL.revokeObjectURL(previous.coughAudioUrl);
@@ -1996,6 +2065,7 @@
   __QQ_SKIN_PET_JSON__,
   __QQ_SKIN_RETRO_FRAME_JSON__,
   __QQ_SKIN_QQ_AVATAR_JSON__,
+  __QQ_SKIN_QQ_SHOW_JSON__,
   __QQ_SKIN_COUGH_AUDIO_JSON__,
   __QQ_SKIN_THEME_JSON__,
   __QQ_STABLE_THEME_JSON__

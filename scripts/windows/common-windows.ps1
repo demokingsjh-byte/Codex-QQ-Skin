@@ -135,7 +135,11 @@ function Test-CodexCdpEndpoint {
   try {
     $connections = @(Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort $Port -State Listen -ErrorAction Stop)
     if (-not $connections -or -not ($connections | Where-Object { Test-ProcessDescendsFromCodex -ProcessId $_.OwningProcess })) { return $false }
-    $targets = @(Invoke-RestMethod -Uri "http://127.0.0.1:$Port/json/list" -TimeoutSec 2 -MaximumRedirection 0)
+    # Windows PowerShell 5.1 returns a top-level JSON array as a single
+    # Object[] pipeline item. Wrapping that call in @() produces a nested
+    # array and makes the endpoint validation below inspect the collection
+    # instead of each DevTools target.
+    $targets = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/json/list" -TimeoutSec 2 -MaximumRedirection 0
     foreach ($target in $targets) {
       if ($target.type -ne 'page' -or -not ([string]$target.url).StartsWith('app://')) { continue }
       $uri = [Uri]$target.webSocketDebuggerUrl

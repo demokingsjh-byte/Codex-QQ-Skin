@@ -138,8 +138,8 @@ assert.match(
 );
 assert.match(
   css,
-  /#codex-qq-skin-companion[\s\S]{0,900}\.qq-skin-companion-stage/,
-  "The classic three-pane skin must ship a dedicated Codex companion card.",
+  /#codex-qq-skin-companion[\s\S]{0,1200}\.qq-skin-show-card/,
+  "The classic skin must ship a dedicated window-level QQ Show rail.",
 );
 assert.match(
   css,
@@ -275,6 +275,10 @@ assert.match(template, /statusLabels[\s\S]{0,500}approval:\s*"需要你的确认
   "The companion must reflect live running, approval, completion, and connectivity states.");
 assert.match(template, /data-companion-action="pet"[\s\S]{0,300}data-companion-action="terminal"[\s\S]{0,300}data-companion-action="sound"/,
   "The companion must expose exactly the requested pet, terminal, and sound shortcuts.");
+assert.match(template, /QQ_SHOW_COLLAPSED_KEY[\s\S]{0,8000}data-companion-action="collapse"/,
+  "The QQ Show rail must expose a persistent collapse control.");
+assert.match(template, /findQQShowHost[\s\S]{0,6000}host\.appendChild\(companion\)/,
+  "The QQ Show rail must join the native shell layout instead of floating over the renderer body.");
 assert.match(template, /const TOGGLE_ID = "codex-qq-skin-toggle"[\s\S]{0,400}codex-qq-skin-mode/,
   "The renderer must ship a persistent three-mode UI selector.");
 assert.match(template, /\["native", "原生"\][\s\S]{0,80}\["qq", "QQ"\][\s\S]{0,80}\["custom", "自定义"\]/,
@@ -330,6 +334,8 @@ assert.match(
 );
 assert.match(css, /\.qq-skin-companion-actions button[\s\S]{0,500}pointer-events:\s*auto;/,
   "The companion card must expose three interactive action buttons.");
+assert.match(css, /#codex-qq-skin-companion\.is-collapsed[\s\S]{0,1200}\.qq-skin-show-stage/,
+  "The QQ Show rail must collapse to a narrow interactive tab.");
 assert.match(css, /\.qq-skin-weekly-usage[\s\S]{0,700}data-level="critical"/,
   "The companion card must visually flag low and critical weekly quota.");
 assert.match(
@@ -658,6 +664,7 @@ function createFixture(theme, {
     .replace("__QQ_SKIN_PET_JSON__", JSON.stringify("data:image/png;base64,AA=="))
     .replace("__QQ_SKIN_RETRO_FRAME_JSON__", JSON.stringify("data:image/png;base64,AA=="))
     .replace("__QQ_SKIN_QQ_AVATAR_JSON__", JSON.stringify("data:image/png;base64,AA=="))
+    .replace("__QQ_SKIN_QQ_SHOW_JSON__", JSON.stringify("data:image/png;base64,AA=="))
     .replace("__QQ_SKIN_COUGH_AUDIO_JSON__", JSON.stringify("data:audio/mpeg;base64,SUQz"))
     .replace("__QQ_SKIN_THEME_JSON__", JSON.stringify(nextTheme))
     .replace("__QQ_STABLE_THEME_JSON__", JSON.stringify({ ...nextTheme, kind: "qq-stable" }))
@@ -745,23 +752,23 @@ const threePane = createFixture({
 }, { summaryToggle: true, leftSidebar: "closed", viewportWidth: 1400 });
 vm.runInNewContext(threePane.payload, threePane.context);
 assert.equal(threePane.leftSidebarButton.clickCount, 1, "The native left sidebar should auto-open once.");
-assert.equal(threePane.summaryButton.clickCount, 1, "The native pinned summary should auto-open once.");
+assert.equal(threePane.summaryButton.clickCount, 0, "QQ Show layout should not auto-open a competing summary column.");
 assert.equal(threePane.attributes.get("data-dream-left-sidebar"), "open");
-assert.equal(threePane.attributes.get("data-dream-three-pane"), "true");
-assert.equal(threePane.attributes.get("data-dream-summary-state"), "open");
+assert.equal(threePane.attributes.get("data-dream-three-pane"), "false");
+assert.equal(threePane.attributes.get("data-dream-summary-state"), "closed");
 assert.equal(
   threePane.nodes.get("codex-qq-skin-companion").classList.contains("is-visible"),
   true,
-  "The Codex pet should appear only with the real pinned summary panel.",
+  "The QQ Show rail should remain visible independently of the native summary panel.",
 );
 assert.equal(
   threePane.nodes.get("codex-qq-skin-right-tray").classList.contains("is-visible"),
-  true,
-  "The blue right tray should appear behind Output/Source and the companion.",
+  false,
+  "The decorative summary tray should stay hidden when the summary panel is closed.",
 );
 threePane.observers[0].callback([]);
 threePane.flushTimers(64);
-assert.equal(threePane.summaryButton.clickCount, 1, "Mutation passes must not toggle the native panel repeatedly.");
+assert.equal(threePane.summaryButton.clickCount, 0, "Mutation passes must not toggle the native panel repeatedly.");
 assert.equal(threePane.leftSidebarButton.clickCount, 1, "Mutation passes must not toggle the left sidebar repeatedly.");
 
 const notificationButtons = [];
@@ -905,9 +912,10 @@ vm.runInNewContext(synchronousWide.payloadFor({
 assert.equal(synchronousWide.nodes.get("codex-qq-skin-style"), stableStyle);
 assert.equal(stableStyle.textContent, ".fixture { color: red; }\n.custom-fixture { color: pink; }");
 assert.equal(stableStyle.dataset.dreamSkinVersion, "test");
-assert.equal(synchronousWide.rootStyle.values.get("--qq-skin-art"), 'url("blob:fixture-8")');
+assert.equal(synchronousWide.rootStyle.values.get("--qq-skin-art"), 'url("blob:fixture-9")');
 assert.deepEqual(synchronousWide.revokedUrls, [
   "blob:fixture-1", "blob:fixture-2", "blob:fixture-3", "blob:fixture-4", "blob:fixture-5", "blob:fixture-6",
+  "blob:fixture-7",
 ]);
 assert.equal(previousWideState.cleanup(), false, "An old async cleanup must not remove the new theme.");
 
@@ -984,6 +992,7 @@ assert.equal(explicit.nodes.has("codex-qq-skin-right-tray"), false);
 assert.equal(explicit.nodes.has("codex-qq-skin-retro-shell"), false);
 assert.deepEqual(explicit.revokedUrls, [
   "blob:fixture-1", "blob:fixture-2", "blob:fixture-3", "blob:fixture-4", "blob:fixture-5", "blob:fixture-6",
+  "blob:fixture-7",
 ]);
 await Promise.resolve();
 await Promise.resolve();
